@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>ホーム</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -10,6 +10,7 @@
   <div class="sidebar">
     <div class="menu">
       <div class="menu-item active">ホーム</div>
+      <!-- 他のメニューをここに追加可能 -->
     </div>
     <div class="logout-wrapper">
       <button id="logout">ログアウト</button>
@@ -17,8 +18,8 @@
   </div>
 
   <div class="content">
-    <h2>ようこそ！</h2>
-    <p>ログインに成功しました。</p>
+    <h2 id="welcome-message">ユーザー情報を読み込み中...</h2>
+    <!-- 表など追加可能 -->
   </div>
 
   <script type="module" src="home.js"></script>
