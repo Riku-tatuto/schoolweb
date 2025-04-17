@@ -1,44 +1,58 @@
-// login.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
-import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword
+} from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  getDocs,
+  collection,
+  query,
+  where
+} from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
 
-// 🔧 Firebase設定（あなたのプロジェクトに置き換えてね）
 const firebaseConfig = {
-  apiKey: "AIzaSyA7zF6AG8DutMOe2PZWmr3aGZU9RhsU9-A",
-  authDomain: "schoolweb-db.firebaseapp.com",
-  projectId: "schoolweb-db",
-  storageBucket: "schoolweb-db.firebasestorage.app",
-  messagingSenderId: "324683464267",
-  appId: "1:324683464267:web:f3a558fa58069c8cd397ce"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID"
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
 const auth = getAuth(app);
+const db = getFirestore(app);
 
-document.getElementById("login-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
+document.getElementById("login").addEventListener("click", async () => {
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value;
-  const errorMessage = document.getElementById("error-message");
+  const errorDiv = document.getElementById("error");
+
+  if (!username || !password) {
+    showError("ユーザー名とパスワードを入力してください。");
+    return;
+  }
 
   try {
-    // ユーザー名からメールを取得
     const q = query(collection(db, "users"), where("username", "==", username));
-    const snapshot = await getDocs(q);
+    const querySnapshot = await getDocs(q);
 
-    if (snapshot.empty) {
-      errorMessage.textContent = "ユーザー名が見つかりません";
+    if (querySnapshot.empty) {
+      showError("ユーザーが見つかりません。");
       return;
     }
 
-    const email = snapshot.docs[0].data().email;
+    const userDoc = querySnapshot.docs[0];
+    const email = userDoc.data().email;
 
-    // ログイン
     await signInWithEmailAndPassword(auth, email, password);
-    location.href = "home.html"; // ログイン成功で遷移
+    window.location.href = "home.html";
   } catch (error) {
-    errorMessage.textContent = "ログイン失敗：" + error.message;
+    showError("ログインに失敗しました：" + error.message);
   }
 });
+
+function showError(message) {
+  const errorDiv = document.getElementById("error");
+  errorDiv.textContent = message;
+  errorDiv.style.display = "block";
+}
