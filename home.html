@@ -4,28 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>ホーム</title>
+  <script type="module" src="home.js" defer></script>
 </head>
 <body>
-  <div style="display: flex; height: 100vh;">
-    <div style="width: 200px; background-color: #007bff; color: white; padding: 20px;">
-      <div style="cursor: pointer; margin-bottom: 10px;" onclick="showPage('home')">ホーム</div>
-      <div style="cursor: pointer; margin-bottom: 10px;" onclick="showPage('timetable')">時間割</div>
-      <div style="position: absolute; bottom: 20px;">
-        <button id="logout" type="button">ログアウト</button>
-      </div>
-    </div>
-
-    <div style="flex-grow: 1; padding: 20px;">
-      <div id="page-home">
-        <h2 id="welcome">ようこそ</h2>
-      </div>
-      <div id="page-timetable" style="display: none;">
-        <h2>時間割</h2>
-        <div id="timetable-area">読み込み中...</div>
-      </div>
-    </div>
-  </div>
-
-  <script type="module" src="./home.js"></script>
+  <h2>ようこそ！</h2>
+  <p id="user-info">ログインユーザー情報：読み込み中...</p>
+  <button id="logout-button">ログアウト</button>
 </body>
 </html>
