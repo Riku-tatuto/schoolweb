@@ -2,12 +2,14 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/fireba
 import {
   getAuth,
   onAuthStateChanged,
-  signOut
+  signOut,
 } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
 import {
   getFirestore,
   doc,
-  getDoc
+  getDoc,
+  collection,
+  getDocs
 } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -24,86 +26,87 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 const welcomeMessage = document.getElementById("welcome-message");
-const logoutBtn = document.getElementById("logout");
-const timetableContainer = document.getElementById("timetable-container");
+const logoutBtn = document.getElementById("logout-btn");
+const homeView = document.getElementById("home-view");
+const timetableView = document.getElementById("timetable-view");
+const timetableTableBody = document.querySelector("#timetable-table tbody");
 
-function showSection(id) {
-  document.querySelectorAll(".section").forEach((sec) => {
-    sec.style.display = "none";
-  });
-  document.getElementById(id).style.display = "block";
-
-  document.querySelectorAll(".menu-item").forEach((item) => {
-    item.classList.remove("active");
-  });
-
-  if (id === "home-section") {
-    document.getElementById("menu-home").classList.add("active");
-  } else if (id === "timetable-section") {
-    document.getElementById("menu-timetable").classList.add("active");
-  }
-}
-
+// メニュー切り替え
 document.getElementById("menu-home").addEventListener("click", () => {
-  showSection("home-section");
+  homeView.style.display = "block";
+  timetableView.style.display = "none";
+  setActive("menu-home");
 });
 
 document.getElementById("menu-timetable").addEventListener("click", () => {
-  showSection("timetable-section");
+  homeView.style.display = "none";
+  timetableView.style.display = "block";
+  loadTimetable();
+  setActive("menu-timetable");
 });
 
-logoutBtn.addEventListener("click", () => {
-  signOut(auth).then(() => {
-    window.location.href = "index.html";
+function setActive(id) {
+  document.querySelectorAll(".menu-item").forEach(item => {
+    item.classList.remove("active");
   });
-});
+  document.getElementById(id).classList.add("active");
+}
 
+// ログイン状態確認とユーザー情報取得
 onAuthStateChanged(auth, async (user) => {
   if (user) {
-    const userDoc = await getDoc(doc(db, "users", user.uid));
-    if (userDoc.exists()) {
-      const data = userDoc.data();
-      welcomeMessage.textContent = `ようこそ、${data.course}コースの${data.grade}年${data.class}組${data.number}番${data.name}さん！`;
+    const usersRef = collection(db, "users");
+    const querySnapshot = await getDocs(usersRef);
+    let userData = null;
 
-      const timetableDoc = await getDoc(doc(db, "timetables", data.course));
-      if (timetableDoc.exists()) {
-        const timetable = timetableDoc.data();
-        renderTimetable(timetable);
-      } else {
-        timetableContainer.innerHTML = "<p>時間割が見つかりませんでした。</p>";
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.email === user.email) {
+        userData = data;
       }
+    });
+
+    if (userData) {
+      welcomeMessage.textContent = `ようこそ、${userData.course}コースの${userData.grade}年${userData.class}組${userData.number}番${userData.realName}さん！`;
+      window.currentCourse = userData.course; // 時間割読み込みに使う
     } else {
       welcomeMessage.textContent = "ユーザー情報が見つかりませんでした。";
     }
   } else {
-    window.location.href = "index.html";
+    location.href = "index.html";
   }
 });
 
-function renderTimetable(data) {
-  const days = ["mon", "tue", "wed", "thu", "fri", "sat"];
-  const dayLabels = ["月", "火", "水", "木", "金", "土"];
-  let html = `<table><thead><tr><th>曜日＼限</th>`;
-
-  for (let i = 1; i <= 6; i++) {
-    html += `<th>${i}限</th>`;
-  }
-  html += `</tr></thead><tbody>`;
-
-  days.forEach((day, i) => {
-    html += `<tr><th>${dayLabels[i]}</th>`;
-    const periods = data[day] || [];
-    for (let j = 0; j < 6; j++) {
-      const period = periods[j];
-      if (period) {
-        html += `<td>${period.subject}<br>${period.room}<br>${period.teacher}</td>`;
-      } else {
-        html += `<td></td>`;
-      }
-    }
-    html += `</tr>`;
+// ログアウト
+logoutBtn.addEventListener("click", () => {
+  signOut(auth).then(() => {
+    location.href = "index.html";
   });
+});
 
-  html += `</tbody></table>`;
-  timetableContainer.innerHTML = html;
+// 時間割読み込み
+async function loadTimetable() {
+  const course = window.currentCourse;
+  const timetableRef = doc(db, "timetables", course);
+  const docSnap = await getDoc(timetableRef);
+
+  if (docSnap.exists()) {
+    const data = docSnap.data();
+    const monday = data.mon; // mon = 配列
+
+    timetableTableBody.innerHTML = ""; // 初期化
+
+    monday.forEach((item, index) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${index + 1}</td>
+        <td>${item.subject}</td>
+        <td>${item.room}</td>
+        <td>${item.teacher}</td>
+      `;
+      timetableTableBody.appendChild(tr);
+    });
+  } else {
+    timetableTableBody.innerHTML = "<tr><td colspan='4'>時間割データが見つかりませんでした。</td></tr>";
+  }
 }
