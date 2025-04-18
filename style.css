@@ -1,126 +1,72 @@
-/* === ログイン/ホーム共通スタイル === */
 body {
+  font-family: Arial, sans-serif;
   margin: 0;
-  font-family: 'Arial', sans-serif;
-  background-color: #f4f4f4;
-  color: #333;
+  display: flex;
+  height: 100vh;
+  background-color: #f5f5f5;
 }
 
 .container {
-  width: 400px;
-  max-width: 90%;
-  margin: auto;
-  padding: 30px;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-h1, h2 {
-  text-align: center;
-}
-
-.input-group {
-  margin-bottom: 15px;
-}
-
-label {
-  display: block;
-  margin-bottom: 5px;
-}
-
-input {
+  display: flex;
   width: 100%;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
 }
 
-.login-btn {
-  width: 100%;
-  padding: 10px;
-  background: #007BFF;
-  border: none;
-  border-radius: 5px;
-  color: white;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-.login-btn:hover {
-  background: #0056b3;
-}
-
-.error-banner {
-  background: #f8d7da;
-  color: #721c24;
-  padding: 10px;
-  border: 1px solid #f5c6cb;
-  border-radius: 5px;
-  margin-top: 15px;
-  display: none;
-}
-
-/* === ホーム画面用スタイル === */
 .sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
   width: 200px;
-  height: 100vh;
-  background: #007BFF;
+  background-color: #007BFF;
+  color: white;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  color: white;
 }
 
-.menu {
-  flex-grow: 1;
+.sidebar h2 {
+  margin-top: 0;
+  margin-bottom: 1rem;
 }
 
 .menu-item {
-  padding: 20px;
+  margin-bottom: 10px;
   cursor: pointer;
-  transition: background 0.3s;
+  padding: 8px;
+  border-radius: 6px;
+  transition: background-color 0.3s;
 }
 
-.menu-item:hover, .menu-item.active {
-  background: #0056b3;
+.menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
-.logout-wrapper {
+.menu-item.active {
+  background-color: rgba(255, 255, 255, 0.3);
+  font-weight: bold;
+}
+
+.logout-button {
   margin-top: auto;
-  padding: 20px;
-}
-
-#logout {
-  width: 100%;
-  padding: 10px;
-  border: none;
-  background: #dc3545;
-  color: white;
-  font-size: 16px;
+  padding: 8px;
+  border-top: 1px solid white;
   cursor: pointer;
-  border-radius: 5px;
+  background-color: #0056b3;
+  border-radius: 6px;
+  text-align: center;
 }
 
-.content {
-  margin-left: 200px;
+.main-content {
+  flex-grow: 1;
   padding: 20px;
+  background: white;
+  overflow-y: auto;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 20px;
+  margin-top: 1rem;
 }
 
 th, td {
-  border: 1px solid #aaa;
   padding: 10px;
+  border: 1px solid #ccc;
   text-align: center;
-}
-
-.menu-item.active {
-  background: #0056b3;
 }
