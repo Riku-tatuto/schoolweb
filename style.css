@@ -1,3 +1,4 @@
+/* === ログイン/ホーム共通スタイル === */
 body {
   margin: 0;
   font-family: 'Arial', sans-serif;
@@ -60,7 +61,7 @@ input {
   display: none;
 }
 
-/* ホーム画面用 */
+/* === ホーム画面用スタイル === */
 .sidebar {
   position: fixed;
   top: 0;
