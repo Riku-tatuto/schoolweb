@@ -3,12 +3,12 @@ import { getFirestore, collection, query, where, getDocs } from "https://www.gst
 import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "XXXXXXX",
-  appId: "APP_ID"
+  apiKey: "AIzaSyA7zF6AG8DutMOe2PZWmr3aGZU9RhsU9-A",
+  authDomain: "schoolweb-db.firebaseapp.com",
+  projectId: "schoolweb-db",
+  storageBucket: "schoolweb-db.firebasestorage.app",
+  messagingSenderId: "324683464267",
+  appId: "1:324683464267:web:f3a558fa58069c8cd397ce"
 };
 
 const app = initializeApp(firebaseConfig);
