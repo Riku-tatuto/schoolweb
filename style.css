@@ -1,3 +1,4 @@
+/* 共通 */
 body {
   margin: 0;
   font-family: 'Arial', sans-serif;
@@ -9,7 +10,7 @@ h1, h2 {
   text-align: center;
 }
 
-/* ログイン画面のコンテナ用 */
+/* ログイン画面用 */
 .container {
   width: 400px;
   max-width: 90%;
@@ -18,6 +19,47 @@ h1, h2 {
   background: white;
   border-radius: 10px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.input-group {
+  margin-bottom: 15px;
+}
+
+label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.login-btn {
+  width: 100%;
+  padding: 10px;
+  background: #007BFF;
+  border: none;
+  border-radius: 5px;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.login-btn:hover {
+  background: #0056b3;
+}
+
+.error-banner {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 10px;
+  border: 1px solid #f5c6cb;
+  border-radius: 5px;
+  margin-top: 15px;
+  display: none;
 }
 
 /* ホーム画面用 */
@@ -50,7 +92,8 @@ h1, h2 {
   transition: background 0.3s;
 }
 
-.menu-item:hover, .menu-item.active {
+.menu-item:hover,
+.menu-item.active {
   background: #0056b3;
 }
 
