@@ -5,13 +5,16 @@ import {
   onAuthStateChanged,
   signOut,
   GoogleAuthProvider,
-  linkWithPopup
+  linkWithPopup,
+  unlink
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 import {
   getFirestore,
   doc,
   getDoc,
-  updateDoc
+  updateDoc,
+  arrayUnion,
+  arrayRemove
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore.js";
 
 // --- Firebase 初期化 ---
@@ -25,23 +28,24 @@ const firebaseConfig = {
 };
 initializeApp(firebaseConfig);
 const auth = getAuth();
-const db = getFirestore();
+const db   = getFirestore();
 
 // --- 要素参照 ---
-const menuHome       = document.getElementById("menu-home");
-const menuTimetable  = document.getElementById("menu-timetable");
-const menuAccount    = document.getElementById("menu-account");
-const homeSection    = document.getElementById("home-section");
-const timetableSection = document.getElementById("timetable-section");
-const accountSection = document.getElementById("account-section");
-const logoutBtn      = document.getElementById("logout");
-const welcomeEl      = document.getElementById("welcome-message");
-const timetableBody  = document.getElementById("timetable-body");
-const accountListEl  = document.getElementById("account-list");
-const linkGoogleBtn  = document.getElementById("link-google-btn");
+const menuHome        = document.getElementById("menu-home");
+const menuTimetable   = document.getElementById("menu-timetable");
+const menuAccount     = document.getElementById("menu-account");
+const homeSection     = document.getElementById("home-section");
+const timetableSection= document.getElementById("timetable-section");
+const accountSection  = document.getElementById("account-section");
+const logoutBtn       = document.getElementById("logout");
+const welcomeEl       = document.getElementById("welcome-message");
+const timetableBody   = document.getElementById("timetable-body");
+const accountListEl   = document.getElementById("account-list");
+const linkGoogleBtn   = document.getElementById("link-google-btn");
 
 let currentUserRef = null;
-let linkedAccounts = [];
+let linkedAccounts = [];       // { email, displayName } の配列
+let linkedGoogleEmails = [];   // 文字列配列
 
 // --- メニュー切り替え ---
 function showSection(sec) {
@@ -74,7 +78,6 @@ logoutBtn.onclick = async () => {
 onAuthStateChanged(auth, async user => {
   if (!user) return location.href = "index.html";
 
-  // Firestore のユーザードキュメント参照
   const uid = sessionStorage.getItem("uid");
   currentUserRef = doc(db, "users", uid);
   const snap = await getDoc(currentUserRef);
@@ -83,13 +86,13 @@ onAuthStateChanged(auth, async user => {
     return;
   }
   const data = snap.data();
-
-  // ようこそメッセージ表示
+  // ようこそメッセージ
   welcomeEl.textContent =
-    `ようこそ ${data.course}コースの${data.grade}年${data.class}組${data.number}番 ${data.realName}さん！`;
+    `ようこそ ${data.course}コース ${data.grade}年${data.class}組${data.number}番 ${data.realName}さん！`;
 
-  // 連携済みアカウント読み込み
-  linkedAccounts = data.linkedGoogleAccounts || [];
+  // 既存の連携情報読み込み
+  linkedAccounts      = data.linkedGoogleAccounts || [];
+  linkedGoogleEmails  = data.linkedGoogleEmails   || [];
 });
 
 // --- Googleアカウント連携（Popup） ---
@@ -97,14 +100,19 @@ linkGoogleBtn.onclick = async () => {
   const provider = new GoogleAuthProvider();
   try {
     const result = await linkWithPopup(auth.currentUser, provider);
-    // リンクした Google プロバイダの情報を取得
     const googleInfo = result.user.providerData.find(p => p.providerId === "google.com");
-    // Firestore に保存
-    linkedAccounts.push({
-      email:       googleInfo.email,
-      displayName: googleInfo.displayName
+    const email       = googleInfo.email;
+    const displayName = googleInfo.displayName;
+
+    // Firestore に保存（オブジェクト配列とメール配列の両方）
+    await updateDoc(currentUserRef, {
+      linkedGoogleAccounts: arrayUnion({ email, displayName }),
+      linkedGoogleEmails:   arrayUnion(email)
     });
-    await updateDoc(currentUserRef, { linkedGoogleAccounts: linkedAccounts });
+
+    // ローカル変数更新
+    linkedAccounts.push({ email, displayName });
+    linkedGoogleEmails.push(email);
     renderAccountList();
   } catch (err) {
     alert("連携に失敗しました：" + err.message);
@@ -116,28 +124,24 @@ async function renderTimetable() {
   const uid = sessionStorage.getItem("uid");
   const userSnap = await getDoc(doc(db, "users", uid));
   const userData = userSnap.data();
-  // コース名マッピング (必要なら)
   const courseId = userData.course === "本科" ? "HONKA" : userData.course;
   const ttSnap = await getDoc(doc(db, "timetables", courseId));
   const ttData = ttSnap.exists() ? ttSnap.data() : {};
-  // 曜日ラベル
-  const days = ["mon","tue","wed","thu","fri","sat"];
+  const days   = ["mon","tue","wed","thu","fri","sat"];
   const labels = ["月","火","水","木","金","土"];
 
   timetableBody.innerHTML = "";
   days.forEach((key, idx) => {
     const row = document.createElement("tr");
-    // 曜日セル
     row.innerHTML = `<td>${labels[idx]}</td>`;
-    // 6限分生成
     const periods = ttData[key] || [];
     for (let i = 0; i < 6; i++) {
       const p = periods[i];
       row.innerHTML += p
         ? `<td>
-            <div class="subject">${p.subject}</div>
-            <div class="detail">${p.room}/${p.teacher}</div>
-          </td>`
+             <div class="subject">${p.subject}</div>
+             <div class="detail">${p.room}/${p.teacher}</div>
+           </td>`
         : `<td>-</td>`;
     }
     timetableBody.appendChild(row);
@@ -163,10 +167,15 @@ function renderAccountList() {
   document.querySelectorAll(".unlink-btn").forEach(btn => {
     btn.onclick = async e => {
       const idx = +e.target.dataset.i;
-      // Auth 側からも unlink
+      const removed = linkedAccounts.splice(idx, 1)[0];
+      const email   = removed.email;
+      // Auth 側アンリンク
       await unlink(auth.currentUser, "google.com");
-      linkedAccounts.splice(idx, 1);
-      await updateDoc(currentUserRef, { linkedGoogleAccounts: linkedAccounts });
+      // Firestore 側両フィールド更新
+      await updateDoc(currentUserRef, {
+        linkedGoogleAccounts: linkedAccounts,
+        linkedGoogleEmails:   arrayRemove(email)
+      });
       renderAccountList();
     };
   });
