@@ -1,10 +1,12 @@
-// login.js
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+// login.js (Googleログイン部分)
 import {
   getAuth,
-  signInWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
+  fetchSignInMethodsForEmail,
+  EmailAuthProvider,
+  signInWithEmailAndPassword,
+  linkWithCredential,
   signOut
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 import {
@@ -12,78 +14,65 @@ import {
   collection,
   query,
   where,
-  getDocs
+  getDocs,
+  arrayUnion
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore.js";
 
-// --- Firebase 初期化 ---
-const firebaseConfig = {
-  apiKey: "AIzaSyA7zF6AG8DutMOe2PZWmr3aGZU9RhsU9-A",
-  authDomain: "schoolweb-db.firebaseapp.com",
-  projectId: "schoolweb-db",
-  storageBucket: "schoolweb-db.firebasestorage.app",
-  messagingSenderId: "324683464267",
-  appId: "1:324683464267:web:f3a558fa58069c8cd397ce"
-};
-initializeApp(firebaseConfig);
 const auth = getAuth();
 const db   = getFirestore();
+const provider = new GoogleAuthProvider();
 
-// --- 要素取得 ---
-const form         = document.getElementById("login-form");
-const googleBtn    = document.getElementById("google-login-btn");
-const errorMessage = document.getElementById("error-message");
-
-// 通常ログイン（変更なし）
-form.addEventListener("submit", async e => {
-  e.preventDefault();
-  errorMessage.style.display = "none";
-  const username = document.getElementById("username").value.trim();
-  const password = document.getElementById("password").value;
+async function loginWithGoogle() {
   try {
-    const q = query(collection(db, "users"), where("username", "==", username));
-    const snap = await getDocs(q);
-    if (snap.empty) throw new Error("ユーザー名が見つかりません");
-    const userDoc = snap.docs[0];
-    await signInWithEmailAndPassword(auth, userDoc.data().email, password);
-    sessionStorage.setItem("uid", userDoc.id);
-    location.href = "home.html";
-  } catch (err) {
-    errorMessage.style.display = "block";
-    errorMessage.textContent = err.message;
-  }
-});
-
-// --- Google ログイン（Popup フローに変更） ---
-googleBtn.addEventListener("click", async () => {
-  errorMessage.style.display = "none";
-  const provider = new GoogleAuthProvider();
-  try {
+    // 1) まずポップアップでサインイン試行
     const result = await signInWithPopup(auth, provider);
-    // Google プロバイダのメール取得
-    const googleEmail = result.user.providerData
-      .find(p => p.providerId === "google.com")
-      .email;
+    const googleEmail = result.user.email;
 
-    // Firestore で linkedGoogleEmails 配列に含まれるかチェック
+    // 2) Firestore 側の linkedGoogleEmails をチェック
     const q = query(
       collection(db, "users"),
       where("linkedGoogleEmails", "array-contains", googleEmail)
     );
     const snap = await getDocs(q);
-    if (snap.empty) {
-      // 連携されていなければエラーを投げる
-      throw new Error("この Google アカウントは連携されていません");
-    }
+    if (snap.empty) throw new Error("この Google アカウントは連携されていません");
 
-    // ログイン成功
+    // 3) ログイン成功
     const userDoc = snap.docs[0];
     sessionStorage.setItem("uid", userDoc.id);
     location.href = "home.html";
 
-  } catch (err) {
-    // 失敗時はいったんサインアウトしてエラー表示
+  } catch (error) {
+    // もし「同じメールで別の認証方法」が登録されていて新規作成されそうなら……
+    if (error.code === 'auth/account-exists-with-different-credential') {
+      const pendingCred = GoogleAuthProvider.credentialFromError(error);
+      const email       = error.customData.email;
+      // どの認証方法が登録されているか調べる
+      const methods = await fetchSignInMethodsForEmail(auth, email);
+      if (methods.includes(EmailAuthProvider.EMAIL_PASSWORD_SIGN_IN_METHOD)) {
+        // パスワード認証で再度ログインさせて……
+        const password = prompt('このメールは既に登録済みです。\nパスワードを入力してください。');
+        const userCred = await signInWithEmailAndPassword(auth, email, password);
+        // pending の Google 資格情報をリンク
+        await linkWithCredential(userCred.user, pendingCred);
+        // Firestore 側のメールリストにも追加
+        const userRef = doc(db, "users", userCred.user.uid);
+        await updateDoc(userRef, {
+          linkedGoogleEmails: arrayUnion(email)
+        });
+        // マージが終わったらホームへ
+        sessionStorage.setItem("uid", userCred.user.uid);
+        location.href = "home.html";
+        return;
+      }
+    }
+
+    // それ以外 or 上記以外の失敗はサインアウトしてエラー表示
     await signOut(auth);
-    errorMessage.style.display = "block";
-    errorMessage.textContent = err.message;
+    document.getElementById("error-message").style.display = "block";
+    document.getElementById("error-message").textContent = error.message;
   }
-});
+}
+
+// イベントに紐付け
+document.getElementById("google-login-btn")
+  .addEventListener("click", loginWithGoogle);
