@@ -1,17 +1,8 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-import {
-  getAuth,
-  onAuthStateChanged,
-  signOut,
-} from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  collection,
-  getDocs
-} from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+import { getFirestore, doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 
+// Firebase設定
 const firebaseConfig = {
   apiKey: "AIzaSyA7zF6AG8DutMOe2PZWmr3aGZU9RhsU9-A",
   authDomain: "schoolweb-db.firebaseapp.com",
@@ -22,91 +13,106 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
-const welcomeMessage = document.getElementById("welcome-message");
-const logoutBtn = document.getElementById("logout-btn");
-const homeView = document.getElementById("home-view");
-const timetableView = document.getElementById("timetable-view");
-const timetableTableBody = document.querySelector("#timetable-table tbody");
+// 要素取得
+const welcomeEl = document.getElementById('welcome-message');
+const userInfoEl = document.getElementById('user-info');
+const homeSection = document.getElementById('home-section');
+const timetableSection = document.getElementById('timetable-section');
+const timetableBody = document.getElementById('timetable-body');
 
-// メニュー切り替え
-document.getElementById("menu-home").addEventListener("click", () => {
-  homeView.style.display = "block";
-  timetableView.style.display = "none";
-  setActive("menu-home");
+// ページ切り替え
+document.getElementById('menu-home').addEventListener('click', () => {
+  homeSection.style.display = 'block';
+  timetableSection.style.display = 'none';
+  setActiveMenu('menu-home');
 });
 
-document.getElementById("menu-timetable").addEventListener("click", () => {
-  homeView.style.display = "none";
-  timetableView.style.display = "block";
-  loadTimetable();
-  setActive("menu-timetable");
+document.getElementById('menu-timetable').addEventListener('click', () => {
+  homeSection.style.display = 'none';
+  timetableSection.style.display = 'block';
+  setActiveMenu('menu-timetable');
 });
 
-function setActive(id) {
-  document.querySelectorAll(".menu-item").forEach(item => {
-    item.classList.remove("active");
-  });
-  document.getElementById(id).classList.add("active");
+function setActiveMenu(id) {
+  document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
 }
 
-// ログイン状態確認とユーザー情報取得
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    const usersRef = collection(db, "users");
-    const querySnapshot = await getDocs(usersRef);
-    let userData = null;
+// ログアウト
+document.getElementById('logout').addEventListener('click', async () => {
+  await signOut(auth);
+  window.location.href = "index.html";
+});
 
-    querySnapshot.forEach((doc) => {
+// ログイン中のユーザー確認
+onAuthStateChanged(auth, async user => {
+  if (user) {
+    const email = user.email;
+    const usersRef = collection(db, "users");
+    const snapshot = await getDocs(usersRef);
+    let matchedUser = null;
+
+    snapshot.forEach(doc => {
       const data = doc.data();
-      if (data.email === user.email) {
-        userData = data;
+      if (data.email === email) {
+        matchedUser = data;
       }
     });
 
-    if (userData) {
-      welcomeMessage.textContent = `ようこそ、${userData.course}コースの${userData.grade}年${userData.class}組${userData.number}番${userData.realName}さん！`;
-      window.currentCourse = userData.course; // 時間割読み込みに使う
+    if (matchedUser) {
+      const { grade, class: classNo, number, course, realName } = matchedUser;
+      welcomeEl.textContent = `ようこそ ${course}コースの${grade}年${classNo}組${number}番 ${realName}さん！`;
+      userInfoEl.textContent = `メール: ${email}`;
+
+      // 時間割取得
+      const timetableRef = doc(db, "timetables", course);
+      const timetableSnap = await getDoc(timetableRef);
+      if (timetableSnap.exists()) {
+        const timetableData = timetableSnap.data();
+        renderTimetable(timetableData);
+      }
     } else {
-      welcomeMessage.textContent = "ユーザー情報が見つかりませんでした。";
+      welcomeEl.textContent = "ユーザー情報が見つかりませんでした。";
     }
   } else {
-    location.href = "index.html";
+    window.location.href = "index.html";
   }
 });
 
-// ログアウト
-logoutBtn.addEventListener("click", () => {
-  signOut(auth).then(() => {
-    location.href = "index.html";
+function renderTimetable(data) {
+  const days = ["mon", "tue", "wed", "thu", "fri", "sat"];
+  const dayLabels = ["月", "火", "水", "木", "金", "土"];
+  timetableBody.innerHTML = "";
+
+  days.forEach((dayKey, i) => {
+    const row = document.createElement("tr");
+    const dayCell = document.createElement("td");
+    dayCell.textContent = dayLabels[i];
+    row.appendChild(dayCell);
+
+    const periods = data[dayKey] || [];
+    for (let j = 0; j < 6; j++) {
+      const cell = document.createElement("td");
+      const period = periods[j];
+      if (period) {
+        const subjectDiv = document.createElement("div");
+        subjectDiv.className = "subject";
+        subjectDiv.textContent = period.subject;
+
+        const detailDiv = document.createElement("div");
+        detailDiv.className = "detail";
+        detailDiv.textContent = `${period.room}/${period.teacher}`;
+
+        cell.appendChild(subjectDiv);
+        cell.appendChild(detailDiv);
+      } else {
+        cell.textContent = "-";
+      }
+      row.appendChild(cell);
+    }
+    timetableBody.appendChild(row);
   });
-});
-
-// 時間割読み込み
-async function loadTimetable() {
-  const course = window.currentCourse;
-  const timetableRef = doc(db, "timetables", course);
-  const docSnap = await getDoc(timetableRef);
-
-  if (docSnap.exists()) {
-    const data = docSnap.data();
-    const monday = data.mon; // mon = 配列
-
-    timetableTableBody.innerHTML = ""; // 初期化
-
-    monday.forEach((item, index) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${index + 1}</td>
-        <td>${item.subject}</td>
-        <td>${item.room}</td>
-        <td>${item.teacher}</td>
-      `;
-      timetableTableBody.appendChild(tr);
-    });
-  } else {
-    timetableTableBody.innerHTML = "<tr><td colspan='4'>時間割データが見つかりませんでした。</td></tr>";
-  }
 }
