@@ -4,8 +4,7 @@ import {
   getAuth,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   signOut
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 import {
@@ -16,7 +15,7 @@ import {
   getDocs
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore.js";
 
-// Firebase 初期化
+// --- Firebase 初期化 ---
 const firebaseConfig = {
   apiKey: "AIzaSyA7zF6AG8DutMOe2PZWmr3aGZU9RhsU9-A",
   authDomain: "schoolweb-db.firebaseapp.com",
@@ -26,27 +25,22 @@ const firebaseConfig = {
   appId: "1:324683464267:web:f3a558fa58069c8cd397ce"
 };
 initializeApp(firebaseConfig);
-
 const auth = getAuth();
 const db   = getFirestore();
 
-// 要素
+// --- 要素取得 ---
 const form         = document.getElementById("login-form");
 const googleBtn    = document.getElementById("google-login-btn");
 const errorMessage = document.getElementById("error-message");
 
-// --- 通常ログイン ---
+// 通常ログイン（変更なし）
 form.addEventListener("submit", async e => {
   e.preventDefault();
   errorMessage.style.display = "none";
-
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value;
   try {
-    const q = query(
-      collection(db, "users"),
-      where("username", "==", username)
-    );
+    const q = query(collection(db, "users"), where("username", "==", username));
     const snap = await getDocs(q);
     if (snap.empty) throw new Error("ユーザー名が見つかりません");
     const userDoc = snap.docs[0];
@@ -59,34 +53,37 @@ form.addEventListener("submit", async e => {
   }
 });
 
-// --- Google ログイン（Redirect フロー） ---
-googleBtn.addEventListener("click", () => {
+// --- Google ログイン（Popup フローに変更） ---
+googleBtn.addEventListener("click", async () => {
   errorMessage.style.display = "none";
   const provider = new GoogleAuthProvider();
-  signInWithRedirect(auth, provider);
-});
+  try {
+    const result = await signInWithPopup(auth, provider);
+    // Google プロバイダのメール取得
+    const googleEmail = result.user.providerData
+      .find(p => p.providerId === "google.com")
+      .email;
 
-// --- リダイレクト後の処理 ---
-getRedirectResult(auth)
-  .then(async result => {
-    if (!result?.user) return;
-    const googleInfo = result.user.providerData.find(p => p.providerId === "google.com");
-    const googleEmail = googleInfo.email;
-
-    // Firestore で linkedGoogleEmails に含まれるかチェック
+    // Firestore で linkedGoogleEmails 配列に含まれるかチェック
     const q = query(
       collection(db, "users"),
       where("linkedGoogleEmails", "array-contains", googleEmail)
     );
     const snap = await getDocs(q);
-    if (snap.empty) throw new Error("この Google アカウントは連携されていません");
+    if (snap.empty) {
+      // 連携されていなければエラーを投げる
+      throw new Error("この Google アカウントは連携されていません");
+    }
 
+    // ログイン成功
     const userDoc = snap.docs[0];
     sessionStorage.setItem("uid", userDoc.id);
     location.href = "home.html";
-  })
-  .catch(async err => {
+
+  } catch (err) {
+    // 失敗時はいったんサインアウトしてエラー表示
     await signOut(auth);
     errorMessage.style.display = "block";
     errorMessage.textContent = err.message;
-  });
+  }
+});
