@@ -139,3 +139,31 @@ td div.detail {
   font-size: 0.9em;
   color: #555;
 }
+/* ←（省略：前回のホーム＋ログインスタイルそのまま） */
+
+/* アカウント一覧 */
+#account-list {
+  margin: 20px 0;
+}
+
+.account-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #ddd;
+}
+
+.unlink-btn {
+  padding: 5px 10px;
+  background: #dc3545;
+  border: none;
+  border-radius: 5px;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.unlink-btn:hover {
+  background: #a71d2a;
+}
