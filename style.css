@@ -167,3 +167,34 @@ td div.detail {
 .unlink-btn:hover {
   background: #a71d2a;
 }
+.account-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.account-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+
+.account-name {
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.account-email {
+  color: gray;
+  margin-right: auto;
+}
+
+.unlink-btn {
+  background-color: #ff5555;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
