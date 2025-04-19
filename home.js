@@ -126,9 +126,13 @@ linkGoogleBtn.addEventListener("click", async () => {
   const provider = new GoogleAuthProvider();
   try {
     const result = await linkWithPopup(auth.currentUser, provider);
+    // Googleプロバイダ情報だけ取り出す
+    const googleInfo = result.user.providerData
+      .find(p => p.providerId === "google.com");
     const newAcct = {
-      email: result.user.email,
-      displayName: result.user.displayName
+      email:    googleInfo.email,
+      displayName: googleInfo.displayName,
+      photoURL: googleInfo.photoURL   // 必要なら写真も保存
     };
     linkedAccounts.push(newAcct);
     await updateDoc(currentUserDocRef, { linkedGoogleAccounts: linkedAccounts });
