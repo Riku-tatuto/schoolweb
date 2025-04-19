@@ -2,8 +2,9 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>ログイン</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
   <script type="module" src="login.js" defer></script>
 </head>
 <body>
@@ -20,6 +21,11 @@
       </div>
       <button class="login-btn" type="submit">ログイン</button>
     </form>
+
+    <button id="google-login-btn" class="login-btn" style="margin-top:10px;">
+      Googleアカウントでログイン
+    </button>
+
     <div id="error-message" class="error-banner"></div>
   </div>
 </body>
