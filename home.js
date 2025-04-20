@@ -5,6 +5,7 @@ import {
   onAuthStateChanged,
   signOut,
   GoogleAuthProvider,
+  linkWithPopup,
   GithubAuthProvider,
   signInWithPopup
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
@@ -45,7 +46,7 @@ const linkGoogleBtn   = document.getElementById("link-google-btn");
 const linkGithubBtn   = document.getElementById("link-github-btn");
 
 let currentUserRef    = null;
-let linkedAccounts    = [];  // Google と GitHub 両方をまとめて扱う
+let linkedAccounts    = [];     // { email, displayName, photoURL } の配列
 let linkedGoogleEmails= [];
 let linkedGitHubEmails= [];
 
@@ -91,23 +92,28 @@ onAuthStateChanged(auth, async user => {
   welcomeEl.textContent =
     `ようこそ ${data.course}コース ${data.grade}年${data.class}組${data.number}番 ${data.realName}さん！`;
 
-  // Firestore 保存データから配列を取得
+  // Firestore の配列フィールド読み込み
   linkedAccounts      = data.linkedGoogleAccounts   || [];
   linkedGoogleEmails  = data.linkedGoogleEmails     || [];
-  // GitHub の配列も追加
   if (data.linkedGitHubAccounts) {
     linkedAccounts = linkedAccounts.concat(data.linkedGitHubAccounts);
   }
   linkedGitHubEmails = data.linkedGitHubEmails || [];
 });
 
-// --- Google連携 ---
+// --- Googleアカウント連携（Popup） ---
 linkGoogleBtn.onclick = async () => {
   const provider = new GoogleAuthProvider();
   try {
-    const result = await signInWithPopup(auth.currentUser, provider);
+    const result = await linkWithPopup(auth.currentUser, provider);
     const info = result.user.providerData.find(p => p.providerId === "google.com");
-    const rec = { email: info.email, displayName: info.displayName, photoURL: info.photoURL };
+    if (!info || !info.email) throw new Error("Google アカウント情報が取得できませんでした");
+
+    const rec = {
+      email:       info.email,
+      displayName: info.displayName,
+      photoURL:    info.photoURL
+    };
     await updateDoc(currentUserRef, {
       linkedGoogleAccounts: arrayUnion(rec),
       linkedGoogleEmails:   arrayUnion(rec.email)
@@ -120,13 +126,20 @@ linkGoogleBtn.onclick = async () => {
   }
 };
 
-// --- GitHub連携 ---
+// --- GitHubアカウント連携（Popup + user:email スコープ） ---
 linkGithubBtn.onclick = async () => {
   const provider = new GithubAuthProvider();
+  provider.addScope("user:email");  // ← GitHub で email を取得するために必要
   try {
     const result = await signInWithPopup(auth.currentUser, provider);
     const info = result.user.providerData.find(p => p.providerId === "github.com");
-    const rec = { email: info.email, displayName: info.displayName, photoURL: info.photoURL };
+    if (!info || !info.email) throw new Error("GitHub アカウント情報が取得できませんでした");
+
+    const rec = {
+      email:       info.email,
+      displayName: info.displayName || info.login,
+      photoURL:    info.photoURL
+    };
     await updateDoc(currentUserRef, {
       linkedGitHubAccounts: arrayUnion(rec),
       linkedGitHubEmails:   arrayUnion(rec.email)
@@ -139,7 +152,7 @@ linkGithubBtn.onclick = async () => {
   }
 };
 
-// --- 時間割描画 ---
+// --- 時間割読み込み & 描画 ---
 async function renderTimetable() {
   const uid = sessionStorage.getItem("uid");
   const userSnap = await getDoc(doc(db, "users", uid));
@@ -186,12 +199,13 @@ function renderAccountList() {
     `;
     accountListEl.appendChild(item);
   });
+
   document.querySelectorAll(".unlink-btn").forEach(btn => {
     btn.onclick = async e => {
       const idx = +e.target.dataset.i;
       const removed = linkedAccounts.splice(idx,1)[0];
       const email   = removed.email;
-      // どちらの配列から削除か判定
+      // Google or GitHub どちらかを判定して配列を更新
       if (linkedGoogleEmails.includes(email)) {
         await updateDoc(currentUserRef, {
           linkedGoogleAccounts: arrayRemove(removed),
