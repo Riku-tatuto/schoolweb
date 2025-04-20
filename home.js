@@ -92,7 +92,6 @@ onAuthStateChanged(auth, async user => {
   welcomeEl.textContent =
     `ようこそ ${data.course}コース ${data.grade}年${data.class}組${data.number}番 ${data.realName}さん！`;
 
-  // Firestore の配列フィールド読み込み
   linkedAccounts     = data.linkedGoogleAccounts   || [];
   linkedGoogleEmails = data.linkedGoogleEmails     || [];
   if (data.linkedGitHubAccounts) {
@@ -129,9 +128,9 @@ linkGoogleBtn.onclick = async () => {
 // --- GitHub アカウント連携（Popup + user:email スコープ） ---
 linkGithubBtn.onclick = async () => {
   const provider = new GithubAuthProvider();
-  provider.addScope("user:email");  // email 取得に必要
+  provider.addScope("user:email");
   try {
-    // ← ここを signInWithPopup ではなく linkWithPopup に！
+    // 成功時に linkWithPopup を使う
     const result = await linkWithPopup(auth.currentUser, provider);
     const info = result.user.providerData.find(p => p.providerId === "github.com");
     if (!info || !info.email) throw new Error("GitHub アカウント情報が取得できませんでした");
@@ -149,7 +148,12 @@ linkGithubBtn.onclick = async () => {
     linkedGitHubEmails.push(rec.email);
     renderAccountList();
   } catch (err) {
-    alert("GitHub連携に失敗しました：" + err.message);
+    // email-already-in-use の場合、別ユーザーに登録済み
+    if (err.code === 'auth/email-already-in-use' || err.code === 'auth/account-exists-with-different-credential') {
+      alert('この GitHub アカウントのメールアドレスは既に別のアカウントで使われています');
+    } else {
+      alert("GitHub連携に失敗しました：" + err.message);
+    }
   }
 };
 
