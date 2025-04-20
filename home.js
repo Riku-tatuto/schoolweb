@@ -1,12 +1,11 @@
-// --- Firebase SDKの読み込み ---
+// --- Firebase SDK の読み込み ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
 import {
   getAuth,
   onAuthStateChanged,
   signOut,
   GoogleAuthProvider,
-  linkWithPopup,
-  unlink
+  signInWithPopup
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 import {
   getFirestore,
@@ -44,8 +43,8 @@ const accountListEl   = document.getElementById("account-list");
 const linkGoogleBtn   = document.getElementById("link-google-btn");
 
 let currentUserRef = null;
-let linkedAccounts = [];       // { email, displayName, photoURL } の配列
-let linkedGoogleEmails = [];   // 文字列配列
+let linkedAccounts = [];     // { email, displayName, photoURL } の配列
+let linkedGoogleEmails = []; // 文字列配列
 
 // --- メニュー切り替え ---
 function showSection(sec) {
@@ -93,24 +92,32 @@ onAuthStateChanged(auth, async user => {
   linkedGoogleEmails  = data.linkedGoogleEmails   || [];
 });
 
-// --- Googleアカウント連携（Popup） ---
+// --- Googleアカウント“登録”処理（Popup） ---
 linkGoogleBtn.onclick = async () => {
   const provider = new GoogleAuthProvider();
   try {
-    const result = await linkWithPopup(auth.currentUser, provider);
-    const googleInfo = result.user.providerData.find(p => p.providerId === "google.com");
-    const email       = googleInfo.email;
-    const displayName = googleInfo.displayName;
-    const photoURL    = googleInfo.photoURL;
+    // 1) Google 認証だけ行う
+    const result = await signInWithPopup(auth, provider);
+    const info = result.user.providerData.find(p => p.providerId === "google.com");
+    const email       = info.email;
+    const displayName = info.displayName;
+    const photoURL    = info.photoURL;
 
+    // 2) Firestore の配列フィールドを更新（Authリンクはしない）
     await updateDoc(currentUserRef, {
       linkedGoogleAccounts: arrayUnion({ email, displayName, photoURL }),
       linkedGoogleEmails:   arrayUnion(email)
     });
 
+    // 3) ローカル配列を更新し UI 再描画
     linkedAccounts.push({ email, displayName, photoURL });
     linkedGoogleEmails.push(email);
     renderAccountList();
+
+    // 4) 認証セッションをクリアして元のユーザー状態に戻す
+    await signOut(auth);
+    // ※ここで必要であれば再度メール/パスワードでサインインさせる処理を入れてください
+
   } catch (err) {
     alert("連携に失敗しました：" + err.message);
   }
@@ -169,9 +176,9 @@ function renderAccountList() {
       const idx = +e.target.dataset.i;
       const removed = linkedAccounts.splice(idx, 1)[0];
       const email   = removed.email;
-      await unlink(auth.currentUser, "google.com");
+      // Firestore の配列から削除
       await updateDoc(currentUserRef, {
-        linkedGoogleAccounts: linkedAccounts,
+        linkedGoogleAccounts: arrayRemove(removed),
         linkedGoogleEmails:   arrayRemove(email)
       });
       renderAccountList();
