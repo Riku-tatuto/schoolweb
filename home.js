@@ -1,5 +1,3 @@
-// home.js
-
 // --- Firebase SDKの読み込み ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
 import {
@@ -7,7 +5,9 @@ import {
   onAuthStateChanged,
   signOut,
   GoogleAuthProvider,
-  linkWithCredential
+  signInWithPopup,
+  linkWithCredential,
+  unlink
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 import {
   getFirestore,
@@ -27,11 +27,11 @@ const firebaseConfig = {
   messagingSenderId: "324683464267",
   appId: "1:324683464267:web:f3a558fa58069c8cd397ce"
 };
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db   = getFirestore(app);
+initializeApp(firebaseConfig);
+const auth = getAuth();
+const db   = getFirestore();
 
-// --- サブ用 Auth インスタンス（名前付きアプリ） ---
+// --- サブAuthインスタンス（Google認証用） ---
 const secApp = initializeApp(firebaseConfig, "secondary");
 const secAuth = getAuth(secApp);
 
@@ -76,7 +76,7 @@ logoutBtn.onclick = async () => {
   location.href = "index.html";
 };
 
-// --- 認証状態変化監視 ---
+// --- 認証状態変化 ---
 onAuthStateChanged(auth, async user => {
   if (!user) return location.href = "index.html";
   const uid = sessionStorage.getItem("uid");
@@ -87,43 +87,36 @@ onAuthStateChanged(auth, async user => {
     return;
   }
   const data = snap.data();
-  welcomeEl.textContent = 
+  welcomeEl.textContent =
     `ようこそ ${data.course}コース ${data.grade}年${data.class}組${data.number}番 ${data.realName}さん！`;
-
   linkedAccounts     = data.linkedGoogleAccounts || [];
   linkedGoogleEmails = data.linkedGoogleEmails   || [];
 });
 
-// --- Google 連携処理（Popup → Credential → linkWithCredential） ---
+// --- Google連携処理 ---
 linkGoogleBtn.onclick = async () => {
   const provider = new GoogleAuthProvider();
   try {
-    // 1) サブAuthでポップアップ認証
+    // サブAuthでGoogleログインしてCredential取得
     const result = await signInWithPopup(secAuth, provider);
-    const cred   = GoogleAuthProvider.credentialFromResult(result);
-    const info   = result.user.providerData.find(p => p.providerId==="google.com");
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    // メインAuthユーザーにCredentialをリンク
+    const linkedUser = await linkWithCredential(auth.currentUser, credential);
+    // プロバイダ情報を取得
+    const info = linkedUser.providerData.find(p => p.providerId === "google.com");
     const { email, displayName, photoURL } = info;
-
-    // 2) メインAuthの現在ユーザーを取得し、credでリンク
-    await linkWithCredential(auth.currentUser, cred);
-
-    // 3) Firestore 側に保存
+    // Firestoreに保存
     await updateDoc(currentUserRef, {
       linkedGoogleAccounts: arrayUnion({ email, displayName, photoURL }),
       linkedGoogleEmails:   arrayUnion(email)
     });
-
-    // 4) ローカル配列更新 & UI反映
     linkedAccounts.push({ email, displayName, photoURL });
     linkedGoogleEmails.push(email);
     renderAccountList();
-
-    // 5) サブAuthからサインアウト
     await signOut(secAuth);
   } catch (err) {
-    // 既にリンク済みなどエラー対応
     alert("連携に失敗しました：" + err.message);
-    try { await signOut(secAuth); } catch {}
+    await signOut(secAuth);
   }
 };
 
@@ -132,21 +125,23 @@ async function renderTimetable() {
   const uid = sessionStorage.getItem("uid");
   const userSnap = await getDoc(doc(db, "users", uid));
   const userData = userSnap.data();
-  const courseId = userData.course==="本科"? "HONKA": userData.course;
+  const courseId = userData.course === "本科" ? "HONKA" : userData.course;
   const ttSnap = await getDoc(doc(db, "timetables", courseId));
-  const ttData = ttSnap.exists()? ttSnap.data(): {};
+  const ttData = ttSnap.exists() ? ttSnap.data() : {};
   const days = ["mon","tue","wed","thu","fri","sat"];
   const labels = ["月","火","水","木","金","土"];
   timetableBody.innerHTML = "";
   days.forEach((k,i)=>{
     const row = document.createElement("tr");
     row.innerHTML = `<td>${labels[i]}</td>`;
-    const ps = ttData[k]||[];
-    for(let j=0;j<6;j++){
-      const p=ps[j];
-      row.innerHTML += p
-        ? `<td><div class="subject">${p.subject}</div><div class="detail">${p.room}/${p.teacher}</div></td>`
-        : `<td>-</td>`;
+    (ttData[k]||[]).forEach((p,j)=>{
+      row.innerHTML += `<td>
+        <div class="subject">${p.subject}</div>
+        <div class="detail">${p.room}/${p.teacher}</div>
+      </td>`;
+    });
+    for(let x=(ttData[k]||[]).length; x<6; x++){
+      row.innerHTML += `<td>-</td>`;
     }
     timetableBody.appendChild(row);
   });
@@ -161,9 +156,9 @@ function renderAccountList() {
   }
   linkedAccounts.forEach((acc,i)=>{
     const div = document.createElement("div");
-    div.className="account-item";
-    div.innerHTML=`
-      ${acc.photoURL? `<img src="${acc.photoURL}" class="account-icon" alt="profile">` : ""}
+    div.className = "account-item";
+    div.innerHTML = `
+      ${acc.photoURL? `<img src="${acc.photoURL}" class="account-icon">` : ""}
       <span class="account-name">${acc.displayName||acc.email}</span>
       <span class="account-email">${acc.email}</span>
       <button class="unlink-btn" data-i="${i}">連携解除</button>
@@ -175,8 +170,7 @@ function renderAccountList() {
       const idx = +e.target.dataset.i;
       const removed = linkedAccounts.splice(idx,1)[0];
       const email  = removed.email;
-      // Firestore 配列から削除
-      await updateDoc(currentUserRef,{
+      await updateDoc(currentUserRef, {
         linkedGoogleAccounts: arrayRemove(removed),
         linkedGoogleEmails:   arrayRemove(email)
       });
