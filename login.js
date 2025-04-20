@@ -1,3 +1,4 @@
+// login.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
 import {
   getAuth,
@@ -16,7 +17,7 @@ import {
   getDocs
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore.js";
 
-// Firebase 初期化
+// --- Firebase 初期化 ---
 const firebaseConfig = {
   apiKey: "AIzaSyA7zF6AG8DutMOe2PZWmr3aGZU9RhsU9-A",
   authDomain: "schoolweb-db.firebaseapp.com",
@@ -29,19 +30,24 @@ initializeApp(firebaseConfig);
 const auth = getAuth();
 const db   = getFirestore();
 
+// --- 要素取得 ---
 const form         = document.getElementById("login-form");
 const googleBtn    = document.getElementById("google-login-btn");
 const githubBtn    = document.getElementById("github-login-btn");
 const errorMessage = document.getElementById("error-message");
 
-// 通常ログイン（ユーザー名＋パスワード）
+// 通常ログイン
 form.addEventListener("submit", async e => {
   e.preventDefault();
   errorMessage.style.display = "none";
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value;
+
   try {
-    const q = query(collection(db, "users"), where("username", "==", username));
+    const q = query(
+      collection(db, "users"),
+      where("username", "==", username)
+    );
     const snap = await getDocs(q);
     if (snap.empty) throw new Error("ユーザー名が見つかりません");
     const userDoc = snap.docs[0];
@@ -54,7 +60,7 @@ form.addEventListener("submit", async e => {
   }
 });
 
-// Googleログイン（連携済みのみ許可）
+// Googleログイン
 googleBtn.addEventListener("click", async () => {
   errorMessage.style.display = "none";
   const provider = new GoogleAuthProvider();
@@ -68,19 +74,23 @@ googleBtn.addEventListener("click", async () => {
       where("linkedGoogleEmails", "array-contains", googleEmail)
     );
     const snap = await getDocs(q);
-    if (snap.empty) throw new Error("この Google アカウントは連携されていません");
+    if (snap.empty) {
+      // 未連携なら Auth 上の一時ユーザーを削除
+      await deleteUser(result.user);
+      await signOut(auth);
+      throw new Error("この Google アカウントは連携されていません");
+    }
 
     const userDoc = snap.docs[0];
     sessionStorage.setItem("uid", userDoc.id);
-    window.location.href = "home.html";
+    location.href = "home.html";
   } catch (err) {
-    await signOut(auth);
     errorMessage.style.display = "block";
     errorMessage.textContent = err.message;
   }
 });
 
-// GitHubログイン（連携済みのみ許可）
+// GitHubログイン
 githubBtn.addEventListener("click", async () => {
   errorMessage.style.display = "none";
   const provider = new GithubAuthProvider();
@@ -102,9 +112,8 @@ githubBtn.addEventListener("click", async () => {
 
     const userDoc = snap.docs[0];
     sessionStorage.setItem("uid", userDoc.id);
-    window.location.href = "home.html";
+    location.href = "home.html";
   } catch (err) {
-    await signOut(auth);
     errorMessage.style.display = "block";
     errorMessage.textContent = err.message;
   }
