@@ -5,9 +5,9 @@ import {
   onAuthStateChanged,
   signOut,
   GoogleAuthProvider,
-  linkWithPopup,
   GithubAuthProvider,
-  signInWithPopup
+  linkWithPopup,
+  unlink
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 import {
   getFirestore,
@@ -129,9 +129,10 @@ linkGoogleBtn.onclick = async () => {
 // --- GitHubアカウント連携（Popup + user:email スコープ） ---
 linkGithubBtn.onclick = async () => {
   const provider = new GithubAuthProvider();
-  provider.addScope("user:email");  // ← GitHub で email を取得するために必要
+  provider.addScope("user:email");
   try {
-    const result = await signInWithPopup(auth.currentUser, provider);
+    // 既存ユーザーに対して連携する場合は linkWithPopup を使う
+    const result = await linkWithPopup(auth.currentUser, provider);
     const info = result.user.providerData.find(p => p.providerId === "github.com");
     if (!info || !info.email) throw new Error("GitHub アカウント情報が取得できませんでした");
 
@@ -195,32 +196,3 @@ function renderAccountList() {
       ${acc.photoURL ? `<img src="${acc.photoURL}" class="account-icon">` : ""}
       <span class="account-name">${acc.displayName || acc.email}</span>
       <span class="account-email">${acc.email}</span>
-      <button class="unlink-btn" data-i="${i}">連携解除</button>
-    `;
-    accountListEl.appendChild(item);
-  });
-
-  document.querySelectorAll(".unlink-btn").forEach(btn => {
-    btn.onclick = async e => {
-      const idx = +e.target.dataset.i;
-      const removed = linkedAccounts.splice(idx,1)[0];
-      const email   = removed.email;
-      // Google or GitHub どちらかを判定して配列を更新
-      if (linkedGoogleEmails.includes(email)) {
-        await updateDoc(currentUserRef, {
-          linkedGoogleAccounts: arrayRemove(removed),
-          linkedGoogleEmails:   arrayRemove(email)
-        });
-      } else {
-        await updateDoc(currentUserRef, {
-          linkedGitHubAccounts: arrayRemove(removed),
-          linkedGitHubEmails:   arrayRemove(email)
-        });
-      }
-      renderAccountList();
-    };
-  });
-}
-
-// --- 初期表示はホーム ---
-showSection("home");
