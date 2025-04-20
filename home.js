@@ -110,8 +110,8 @@ linkGoogleBtn.onclick = async () => {
 
     const rec = {
       email:       info.email,
-      displayName: info.displayName,
-      photoURL:    info.photoURL
+      displayName: info.displayName || "",
+      photoURL:    info.photoURL || ""
     };
     await updateDoc(currentUserRef, {
       linkedGoogleAccounts: arrayUnion(rec),
@@ -130,15 +130,14 @@ linkGithubBtn.onclick = async () => {
   const provider = new GithubAuthProvider();
   provider.addScope("user:email");
   try {
-    // 成功時に linkWithPopup を使う
     const result = await linkWithPopup(auth.currentUser, provider);
     const info = result.user.providerData.find(p => p.providerId === "github.com");
     if (!info || !info.email) throw new Error("GitHub アカウント情報が取得できませんでした");
 
     const rec = {
       email:       info.email,
-      displayName: info.displayName || info.login,
-      photoURL:    info.photoURL
+      displayName: info.displayName || info.login || "",
+      photoURL:    info.photoURL || ""
     };
     await updateDoc(currentUserRef, {
       linkedGitHubAccounts: arrayUnion(rec),
@@ -148,9 +147,8 @@ linkGithubBtn.onclick = async () => {
     linkedGitHubEmails.push(rec.email);
     renderAccountList();
   } catch (err) {
-    // email-already-in-use の場合、別ユーザーに登録済み
     if (err.code === 'auth/email-already-in-use' || err.code === 'auth/account-exists-with-different-credential') {
-      alert('この GitHub アカウントのメールアドレスは既に別のアカウントで使われています');
+      alert('この GitHub アカウントのメールアドレスは別アカウントで使用されています');
     } else {
       alert("GitHub連携に失敗しました：" + err.message);
     }
@@ -213,18 +211,22 @@ function renderAccountList() {
       const idx = +e.target.dataset.i;
       const removed = linkedAccounts.splice(idx, 1)[0];
       const email   = removed.email;
-
+      let providerId;
       if (linkedGoogleEmails.includes(email)) {
+        providerId = 'google.com';
         await updateDoc(currentUserRef, {
           linkedGoogleAccounts: arrayRemove(removed),
           linkedGoogleEmails:   arrayRemove(email)
         });
       } else {
+        providerId = 'github.com';
         await updateDoc(currentUserRef, {
           linkedGitHubAccounts: arrayRemove(removed),
           linkedGitHubEmails:   arrayRemove(email)
         });
       }
+      // 認証側からもアンリンク
+      await unlink(auth.currentUser, providerId);
       renderAccountList();
     };
   });
