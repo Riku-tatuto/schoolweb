@@ -156,10 +156,7 @@ function renderAccountList() {
     const item = document.createElement("div");
     item.className = "account-item";
     item.innerHTML = `
-      <img src="${acc.photoURL || 'default-icon.png'}"
-           alt="profile"
-           class="account-icon"
-           onerror="this.onerror=null; this.src='default-icon.png';">
+      ${acc.photoURL ? `<img src="${acc.photoURL}" alt="profile" class="account-icon">` : ""}
       <span class="account-name">${acc.displayName || acc.email}</span>
       <span class="account-email">${acc.email}</span>
       <button class="unlink-btn" data-i="${i}">連携解除</button>
