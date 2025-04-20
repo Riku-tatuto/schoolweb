@@ -1,9 +1,9 @@
-// login.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
 import {
   getAuth,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
+  GithubAuthProvider,
   signInWithPopup,
   deleteUser,
   signOut
@@ -16,7 +16,7 @@ import {
   getDocs
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore.js";
 
-// --- Firebase 初期化 ---
+// Firebase 初期化
 const firebaseConfig = {
   apiKey: "AIzaSyA7zF6AG8DutMOe2PZWmr3aGZU9RhsU9-A",
   authDomain: "schoolweb-db.firebaseapp.com",
@@ -29,12 +29,12 @@ initializeApp(firebaseConfig);
 const auth = getAuth();
 const db   = getFirestore();
 
-// --- 要素取得 ---
 const form         = document.getElementById("login-form");
 const googleBtn    = document.getElementById("google-login-btn");
+const githubBtn    = document.getElementById("github-login-btn");
 const errorMessage = document.getElementById("error-message");
 
-// 通常ログイン（変更なし）
+// 通常ログイン（ユーザー名＋パスワード）
 form.addEventListener("submit", async e => {
   e.preventDefault();
   errorMessage.style.display = "none";
@@ -54,40 +54,56 @@ form.addEventListener("submit", async e => {
   }
 });
 
-// Google ログイン（Popup 方式＋未連携時に即削除）
+// Googleログイン（連携済みのみ許可）
 googleBtn.addEventListener("click", async () => {
   errorMessage.style.display = "none";
   const provider = new GoogleAuthProvider();
-
   try {
-    // 1) Google ポップアップで認証
     const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-    const googleEmail = user.providerData
-      .find(p => p.providerId === "google.com")
-      .email;
+    const googleEmail = result.user.providerData
+      .find(p => p.providerId === "google.com").email;
 
-    // 2) Firestore に fake-email アカウントが登録されているかチェック
     const q = query(
       collection(db, "users"),
       where("linkedGoogleEmails", "array-contains", googleEmail)
     );
     const snap = await getDocs(q);
+    if (snap.empty) throw new Error("この Google アカウントは連携されていません");
 
-    if (snap.empty) {
-      // ── 連携前の Google アカウントなら即削除 ──
-      await deleteUser(user);
-      await signOut(auth);
-      throw new Error("この Google アカウントは連携されていません");
-    }
-
-    // 3) 連携済みならログイン成功
     const userDoc = snap.docs[0];
     sessionStorage.setItem("uid", userDoc.id);
-    location.href = "home.html";
-
+    window.location.href = "home.html";
   } catch (err) {
-    // deleteUser や signInWithPopup のエラーもこちらに
+    await signOut(auth);
+    errorMessage.style.display = "block";
+    errorMessage.textContent = err.message;
+  }
+});
+
+// GitHubログイン（連携済みのみ許可）
+githubBtn.addEventListener("click", async () => {
+  errorMessage.style.display = "none";
+  const provider = new GithubAuthProvider();
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const ghEmail = result.user.providerData
+      .find(p => p.providerId === "github.com").email;
+
+    const q = query(
+      collection(db, "users"),
+      where("linkedGitHubEmails", "array-contains", ghEmail)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      await deleteUser(result.user);
+      await signOut(auth);
+      throw new Error("この GitHub アカウントは連携されていません");
+    }
+
+    const userDoc = snap.docs[0];
+    sessionStorage.setItem("uid", userDoc.id);
+    window.location.href = "home.html";
+  } catch (err) {
     await signOut(auth);
     errorMessage.style.display = "block";
     errorMessage.textContent = err.message;
