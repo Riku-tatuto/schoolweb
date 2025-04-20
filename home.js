@@ -1,4 +1,4 @@
-// --- Firebase SDKの読み込み ---
+// --- Firebase SDK の読み込み ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
 import {
   getAuth,
@@ -45,10 +45,10 @@ const accountListEl   = document.getElementById("account-list");
 const linkGoogleBtn   = document.getElementById("link-google-btn");
 const linkGithubBtn   = document.getElementById("link-github-btn");
 
-let currentUserRef    = null;
-let linkedAccounts    = [];     // { email, displayName, photoURL } の配列
-let linkedGoogleEmails= [];
-let linkedGitHubEmails= [];
+let currentUserRef     = null;
+let linkedAccounts     = [];     // { email, displayName, photoURL } の配列
+let linkedGoogleEmails = [];
+let linkedGitHubEmails = [];
 
 // --- メニュー切り替え ---
 function showSection(sec) {
@@ -93,15 +93,15 @@ onAuthStateChanged(auth, async user => {
     `ようこそ ${data.course}コース ${data.grade}年${data.class}組${data.number}番 ${data.realName}さん！`;
 
   // Firestore の配列フィールド読み込み
-  linkedAccounts      = data.linkedGoogleAccounts   || [];
-  linkedGoogleEmails  = data.linkedGoogleEmails     || [];
+  linkedAccounts     = data.linkedGoogleAccounts   || [];
+  linkedGoogleEmails = data.linkedGoogleEmails     || [];
   if (data.linkedGitHubAccounts) {
     linkedAccounts = linkedAccounts.concat(data.linkedGitHubAccounts);
   }
   linkedGitHubEmails = data.linkedGitHubEmails || [];
 });
 
-// --- Googleアカウント連携（Popup） ---
+// --- Google アカウント連携（Popup） ---
 linkGoogleBtn.onclick = async () => {
   const provider = new GoogleAuthProvider();
   try {
@@ -126,12 +126,12 @@ linkGoogleBtn.onclick = async () => {
   }
 };
 
-// --- GitHubアカウント連携（Popup + user:email スコープ） ---
+// --- GitHub アカウント連携（Popup + user:email スコープ） ---
 linkGithubBtn.onclick = async () => {
   const provider = new GithubAuthProvider();
-  provider.addScope("user:email");
+  provider.addScope("user:email");  // email 取得に必要
   try {
-    // 既存ユーザーに対して連携する場合は linkWithPopup を使う
+    // ← ここを signInWithPopup ではなく linkWithPopup に！
     const result = await linkWithPopup(auth.currentUser, provider);
     const info = result.user.providerData.find(p => p.providerId === "github.com");
     if (!info || !info.email) throw new Error("GitHub アカウント情報が取得できませんでした");
@@ -190,9 +190,41 @@ function renderAccountList() {
     return;
   }
   linkedAccounts.forEach((acc, i) => {
+    const photoTag = acc.photoURL
+      ? `<img src="${acc.photoURL}" class="account-icon" alt="icon">`
+      : "";
     const item = document.createElement("div");
     item.className = "account-item";
     item.innerHTML = `
-      ${acc.photoURL ? `<img src="${acc.photoURL}" class="account-icon">` : ""}
+      ${photoTag}
       <span class="account-name">${acc.displayName || acc.email}</span>
       <span class="account-email">${acc.email}</span>
+      <button class="unlink-btn" data-i="${i}">連携解除</button>
+    `;
+    accountListEl.appendChild(item);
+  });
+
+  document.querySelectorAll(".unlink-btn").forEach(btn => {
+    btn.onclick = async e => {
+      const idx = +e.target.dataset.i;
+      const removed = linkedAccounts.splice(idx, 1)[0];
+      const email   = removed.email;
+
+      if (linkedGoogleEmails.includes(email)) {
+        await updateDoc(currentUserRef, {
+          linkedGoogleAccounts: arrayRemove(removed),
+          linkedGoogleEmails:   arrayRemove(email)
+        });
+      } else {
+        await updateDoc(currentUserRef, {
+          linkedGitHubAccounts: arrayRemove(removed),
+          linkedGitHubEmails:   arrayRemove(email)
+        });
+      }
+      renderAccountList();
+    };
+  });
+}
+
+// --- 初期表示はホーム ---
+showSection("home");
