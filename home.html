@@ -24,13 +24,12 @@
     <!-- ホーム -->
     <div id="home-section">
       <h1 id="welcome-message">ようこそ！</h1>
-      <p id="user-info"></p>
     </div>
 
     <!-- 時間割 -->
     <div id="timetable-section" style="display: none;">
       <h2>時間割</h2>
-      <table id="timetable-table">
+      <table>
         <thead>
           <tr>
             <th>曜日</th><th>1限</th><th>2限</th><th>3限</th>
@@ -44,11 +43,12 @@
     <!-- アカウント設定 -->
     <div id="account-section" style="display: none;">
       <h2>アカウント設定</h2>
-      <div id="account-list">
-        <!-- ここに連携済みGoogleアカウントをリスト表示 -->
-      </div>
+      <div id="account-list"></div>
       <button id="link-google-btn" class="login-btn">
         Googleアカウントと連携
+      </button>
+      <button id="link-github-btn" class="login-btn" style="margin-top:10px;">
+        GitHubアカウントと連携
       </button>
     </div>
   </div>
