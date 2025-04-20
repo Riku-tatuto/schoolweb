@@ -1,13 +1,11 @@
-// --- Firebase SDKの読み込み ---
+// --- Firebase SDK の読み込み ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
 import {
   getAuth,
   onAuthStateChanged,
   signOut,
   GoogleAuthProvider,
-  signInWithPopup,
-  linkWithCredential,
-  unlink
+  signInWithPopup
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 import {
   getFirestore,
@@ -31,11 +29,7 @@ initializeApp(firebaseConfig);
 const auth = getAuth();
 const db   = getFirestore();
 
-// --- サブAuthインスタンス（Google認証用） ---
-const secApp = initializeApp(firebaseConfig, "secondary");
-const secAuth = getAuth(secApp);
-
-// --- HTML 要素参照 ---
+// --- 要素参照 ---
 const menuHome        = document.getElementById("menu-home");
 const menuTimetable   = document.getElementById("menu-timetable");
 const menuAccount     = document.getElementById("menu-account");
@@ -49,20 +43,23 @@ const accountListEl   = document.getElementById("account-list");
 const linkGoogleBtn   = document.getElementById("link-google-btn");
 
 let currentUserRef = null;
-let linkedAccounts = [];
-let linkedGoogleEmails = [];
+let linkedAccounts = [];     // { email, displayName, photoURL } の配列
+let linkedGoogleEmails = []; // 文字列配列
 
-// --- セクション切り替え ---
+// --- メニュー切り替え ---
 function showSection(sec) {
   [homeSection, timetableSection, accountSection].forEach(s => s.style.display = "none");
   document.querySelectorAll(".menu-item").forEach(i => i.classList.remove("active"));
   if (sec === "home") {
-    homeSection.style.display = "block"; menuHome.classList.add("active");
+    homeSection.style.display = "block";
+    menuHome.classList.add("active");
   } else if (sec === "timetable") {
-    timetableSection.style.display = "block"; menuTimetable.classList.add("active");
+    timetableSection.style.display = "block";
+    menuTimetable.classList.add("active");
     renderTimetable();
   } else {
-    accountSection.style.display = "block"; menuAccount.classList.add("active");
+    accountSection.style.display = "block";
+    menuAccount.classList.add("active");
     renderAccountList();
   }
 }
@@ -79,6 +76,7 @@ logoutBtn.onclick = async () => {
 // --- 認証状態変化 ---
 onAuthStateChanged(auth, async user => {
   if (!user) return location.href = "index.html";
+
   const uid = sessionStorage.getItem("uid");
   currentUserRef = doc(db, "users", uid);
   const snap = await getDoc(currentUserRef);
@@ -89,38 +87,43 @@ onAuthStateChanged(auth, async user => {
   const data = snap.data();
   welcomeEl.textContent =
     `ようこそ ${data.course}コース ${data.grade}年${data.class}組${data.number}番 ${data.realName}さん！`;
-  linkedAccounts     = data.linkedGoogleAccounts || [];
-  linkedGoogleEmails = data.linkedGoogleEmails   || [];
+
+  linkedAccounts      = data.linkedGoogleAccounts || [];
+  linkedGoogleEmails  = data.linkedGoogleEmails   || [];
 });
 
-// --- Google連携処理 ---
+// --- Googleアカウント“登録”処理（Popup） ---
 linkGoogleBtn.onclick = async () => {
   const provider = new GoogleAuthProvider();
   try {
-    // サブAuthでGoogleログインしてCredential取得
-    const result = await signInWithPopup(secAuth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    // メインAuthユーザーにCredentialをリンク
-    const linkedUser = await linkWithCredential(auth.currentUser, credential);
-    // プロバイダ情報を取得
-    const info = linkedUser.providerData.find(p => p.providerId === "google.com");
-    const { email, displayName, photoURL } = info;
-    // Firestoreに保存
+    // 1) Google 認証だけ行う
+    const result = await signInWithPopup(auth, provider);
+    const info = result.user.providerData.find(p => p.providerId === "google.com");
+    const email       = info.email;
+    const displayName = info.displayName;
+    const photoURL    = info.photoURL;
+
+    // 2) Firestore の配列フィールドを更新（Authリンクはしない）
     await updateDoc(currentUserRef, {
       linkedGoogleAccounts: arrayUnion({ email, displayName, photoURL }),
       linkedGoogleEmails:   arrayUnion(email)
     });
+
+    // 3) ローカル配列を更新し UI 再描画
     linkedAccounts.push({ email, displayName, photoURL });
     linkedGoogleEmails.push(email);
     renderAccountList();
-    await signOut(secAuth);
+
+    // 4) 認証セッションをクリアして元のユーザー状態に戻す
+    await signOut(auth);
+    // ※ここで必要であれば再度メール/パスワードでサインインさせる処理を入れてください
+
   } catch (err) {
     alert("連携に失敗しました：" + err.message);
-    await signOut(secAuth);
   }
 };
 
-// --- 時間割描画 ---
+// --- 時間割読み込み & 描画 ---
 async function renderTimetable() {
   const uid = sessionStorage.getItem("uid");
   const userSnap = await getDoc(doc(db, "users", uid));
@@ -128,20 +131,22 @@ async function renderTimetable() {
   const courseId = userData.course === "本科" ? "HONKA" : userData.course;
   const ttSnap = await getDoc(doc(db, "timetables", courseId));
   const ttData = ttSnap.exists() ? ttSnap.data() : {};
-  const days = ["mon","tue","wed","thu","fri","sat"];
+  const days   = ["mon","tue","wed","thu","fri","sat"];
   const labels = ["月","火","水","木","金","土"];
+
   timetableBody.innerHTML = "";
-  days.forEach((k,i)=>{
+  days.forEach((key, idx) => {
     const row = document.createElement("tr");
-    row.innerHTML = `<td>${labels[i]}</td>`;
-    (ttData[k]||[]).forEach((p,j)=>{
-      row.innerHTML += `<td>
-        <div class="subject">${p.subject}</div>
-        <div class="detail">${p.room}/${p.teacher}</div>
-      </td>`;
-    });
-    for(let x=(ttData[k]||[]).length; x<6; x++){
-      row.innerHTML += `<td>-</td>`;
+    row.innerHTML = `<td>${labels[idx]}</td>`;
+    const periods = ttData[key] || [];
+    for (let i = 0; i < 6; i++) {
+      const p = periods[i];
+      row.innerHTML += p
+        ? `<td>
+             <div class="subject">${p.subject}</div>
+             <div class="detail">${p.room}/${p.teacher}</div>
+           </td>`
+        : `<td>-</td>`;
     }
     timetableBody.appendChild(row);
   });
@@ -150,26 +155,28 @@ async function renderTimetable() {
 // --- アカウント一覧描画 ---
 function renderAccountList() {
   accountListEl.innerHTML = "";
-  if (!linkedAccounts.length) {
+  if (linkedAccounts.length === 0) {
     accountListEl.textContent = "連携中の Google アカウントはありません。";
     return;
   }
-  linkedAccounts.forEach((acc,i)=>{
-    const div = document.createElement("div");
-    div.className = "account-item";
-    div.innerHTML = `
-      ${acc.photoURL? `<img src="${acc.photoURL}" class="account-icon">` : ""}
-      <span class="account-name">${acc.displayName||acc.email}</span>
+  linkedAccounts.forEach((acc, i) => {
+    const item = document.createElement("div");
+    item.className = "account-item";
+    item.innerHTML = `
+      ${acc.photoURL ? `<img src="${acc.photoURL}" alt="profile" class="account-icon">` : ""}
+      <span class="account-name">${acc.displayName || acc.email}</span>
       <span class="account-email">${acc.email}</span>
       <button class="unlink-btn" data-i="${i}">連携解除</button>
     `;
-    accountListEl.appendChild(div);
+    accountListEl.appendChild(item);
   });
-  document.querySelectorAll(".unlink-btn").forEach(btn=>{
-    btn.onclick = async e=>{
+
+  document.querySelectorAll(".unlink-btn").forEach(btn => {
+    btn.onclick = async e => {
       const idx = +e.target.dataset.i;
-      const removed = linkedAccounts.splice(idx,1)[0];
-      const email  = removed.email;
+      const removed = linkedAccounts.splice(idx, 1)[0];
+      const email   = removed.email;
+      // Firestore の配列から削除
       await updateDoc(currentUserRef, {
         linkedGoogleAccounts: arrayRemove(removed),
         linkedGoogleEmails:   arrayRemove(email)
@@ -179,5 +186,5 @@ function renderAccountList() {
   });
 }
 
-// --- 初期表示 ---
+// --- 初期表示はホーム ---
 showSection("home");
