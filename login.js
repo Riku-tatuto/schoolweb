@@ -2,20 +2,19 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
 import {
   getAuth,
-  onAuthStateChanged,
-  signOut,
+  signInWithEmailAndPassword,
   GoogleAuthProvider,
   GithubAuthProvider,
-  linkWithPopup,
-  unlink
+  signInWithPopup,
+  deleteUser,
+  signOut
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 import {
   getFirestore,
-  doc,
-  getDoc,
-  updateDoc,
-  arrayUnion,
-  arrayRemove
+  collection,
+  query,
+  where,
+  getDocs
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore.js";
 
 // --- Firebase 初期化 ---
@@ -31,191 +30,88 @@ initializeApp(firebaseConfig);
 const auth = getAuth();
 const db   = getFirestore();
 
-// --- 要素参照 ---
-const menuHome        = document.getElementById("menu-home");
-const menuTimetable   = document.getElementById("menu-timetable");
-const menuAccount     = document.getElementById("menu-account");
-const homeSection     = document.getElementById("home-section");
-const timetableSection= document.getElementById("timetable-section");
-const accountSection  = document.getElementById("account-section");
-const logoutBtn       = document.getElementById("logout");
-const welcomeEl       = document.getElementById("welcome-message");
-const timetableBody   = document.getElementById("timetable-body");
-const accountListEl   = document.getElementById("account-list");
-const linkGoogleBtn   = document.getElementById("link-google-btn");
-const linkGithubBtn   = document.getElementById("link-github-btn");
+// --- 要素取得 ---
+const form         = document.getElementById("login-form");
+const googleBtn    = document.getElementById("google-login-btn");
+const githubBtn    = document.getElementById("github-login-btn");
+const errorMessage = document.getElementById("error-message");
 
-let currentUserRef     = null;
-let linkedAccounts     = [];
-let linkedGoogleEmails = [];
-let linkedGitHubEmails = [];
-
-// --- メニュー切り替え ---
-function showSection(sec) {
-  [homeSection, timetableSection, accountSection].forEach(s => s.style.display = "none");
-  document.querySelectorAll(".menu-item").forEach(i => i.classList.remove("active"));
-  if (sec === "home") {
-    homeSection.style.display = "block";
-    menuHome.classList.add("active");
-  } else if (sec === "timetable") {
-    timetableSection.style.display = "block";
-    menuTimetable.classList.add("active");
-    renderTimetable();
-  } else {
-    accountSection.style.display = "block";
-    menuAccount.classList.add("active");
-    renderAccountList();
+// --- 通常ログイン（ユーザー名＋パスワード） ---
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  errorMessage.style.display = "none";
+  const username = document.getElementById("username").value.trim();
+  const password = document.getElementById("password").value;
+  try {
+    const q = query(
+      collection(db, "users"),
+      where("username", "==", username)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) throw new Error("ユーザー名が見つかりません");
+    const userDoc = snap.docs[0];
+    await signInWithEmailAndPassword(auth, userDoc.data().email, password);
+    sessionStorage.setItem("uid", userDoc.id);
+    location.href = "home.html";
+  } catch (err) {
+    errorMessage.style.display = "block";
+    errorMessage.textContent = err.message;
   }
-}
-menuHome.onclick      = () => showSection("home");
-menuTimetable.onclick = () => showSection("timetable");
-menuAccount.onclick   = () => showSection("account");
-
-// --- ログアウト ---
-logoutBtn.onclick = async () => {
-  await signOut(auth);
-  location.href = "index.html";
-};
-
-// --- 認証状態変化 ---
-onAuthStateChanged(auth, async user => {
-  if (!user) return location.href = "index.html";
-
-  const uid = sessionStorage.getItem("uid");
-  currentUserRef = doc(db, "users", uid);
-  const snap = await getDoc(currentUserRef);
-  if (!snap.exists()) {
-    welcomeEl.textContent = "ユーザー情報が見つかりません。";
-    return;
-  }
-  const data = snap.data();
-  welcomeEl.textContent =
-    `ようこそ ${data.course}コース ${data.grade}年${data.class}組${data.number}番 ${data.realName}さん！`;
-
-  // Firestore の配列フィールド読み込み
-  linkedGoogleEmails = data.linkedGoogleEmails || [];
-  linkedGitHubEmails = data.linkedGitHubEmails || [];
-  // 各プロバイダの表示用オブジェクトを合成
-  linkedAccounts = [];
-  if (data.linkedGoogleAccounts) linkedAccounts = data.linkedGoogleAccounts.slice();
-  if (data.linkedGitHubAccounts) linkedAccounts = linkedAccounts.concat(data.linkedGitHubAccounts);
 });
 
-// --- Google アカウント連携（Popup） ---
-linkGoogleBtn.onclick = async () => {
+// --- Google ログイン（連携済みのみ許可） ---
+googleBtn.addEventListener("click", async () => {
+  errorMessage.style.display = "none";
   const provider = new GoogleAuthProvider();
   try {
-    const result = await linkWithPopup(auth.currentUser, provider);
-    const info = result.user.providerData.find(p => p.providerId === "google.com");
-    if (!info || !info.email) throw new Error("Google アカウント情報が取得できませんでした");
+    const result = await signInWithPopup(auth, provider);
+    const googleEmail = result.user.providerData
+      .find(p => p.providerId === "google.com").email;
 
-    const rec = { email: info.email, displayName: info.displayName || "", photoURL: info.photoURL || "" };
-    // Firestore 更新
-    await updateDoc(currentUserRef, {
-      linkedGoogleAccounts: arrayUnion(rec),
-      linkedGoogleEmails:   arrayUnion(rec.email)
-    });
-    // 最新データを取得して反映
-    const newSnap = await getDoc(currentUserRef);
-    const newData = newSnap.data();
-    linkedGoogleEmails = newData.linkedGoogleEmails || [];
-    linkedAccounts = (newData.linkedGoogleAccounts || []).slice();
-    if (newData.linkedGitHubAccounts) linkedAccounts = linkedAccounts.concat(newData.linkedGitHubAccounts);
-    renderAccountList();
+    const q = query(
+      collection(db, "users"),
+      where("linkedGoogleEmails", "array-contains", googleEmail)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) throw new Error("この Google アカウントは連携されていません");
+
+    const userDoc = snap.docs[0];
+    sessionStorage.setItem("uid", userDoc.id);
+    window.location.href = "home.html";
   } catch (err) {
-    alert("Google連携に失敗しました：" + err.message);
+    await deleteUser(auth.currentUser);
+    await signOut(auth);
+    errorMessage.style.display = "block";
+    errorMessage.textContent = err.message;
   }
-};
+});
 
-// --- GitHub アカウント連携（Popup + user:email スコープ） ---
-linkGithubBtn.onclick = async () => {
+// --- GitHub ログイン（連携済みのみ許可） ---
+githubBtn.addEventListener("click", async () => {
+  errorMessage.style.display = "none";
   const provider = new GithubAuthProvider();
-  provider.addScope("user:email");
   try {
-    const result = await linkWithPopup(auth.currentUser, provider);
-    const info = result.user.providerData.find(p => p.providerId === "github.com");
-    if (!info || !info.email) throw new Error("GitHub アカウント情報が取得できませんでした");
+    const result = await signInWithPopup(auth, provider);
+    const ghEmail = result.user.providerData
+      .find(p => p.providerId === "github.com").email;
 
-    const rec = { email: info.email, displayName: info.displayName || info.login || "", photoURL: info.photoURL || "" };
-    await updateDoc(currentUserRef, {
-      linkedGitHubAccounts: arrayUnion(rec),
-      linkedGitHubEmails:   arrayUnion(rec.email)
-    });
-    // 最新データを取得して反映
-    const newSnap = await getDoc(currentUserRef);
-    const newData = newSnap.data();
-    linkedGitHubEmails = newData.linkedGitHubEmails || [];
-    linkedAccounts = (newData.linkedGoogleAccounts || []).slice();
-    if (newData.linkedGitHubAccounts) linkedAccounts = linkedAccounts.concat(newData.linkedGitHubAccounts);
-    renderAccountList();
-  } catch (err) {
-    alert("GitHub連携に失敗しました：" + err.message);
-  }
-};
-
-// --- 時間割読み込み & 描画 ---
-async function renderTimetable() {
-  const uid = sessionStorage.getItem("uid");
-  const userSnap = await getDoc(doc(db, "users", uid));
-  const userData = userSnap.data();
-  const courseId = userData.course === "本科" ? "HONKA" : userData.course;
-  const ttSnap = await getDoc(doc(db, "timetables", courseId));
-  const ttData = ttSnap.exists() ? ttSnap.data() : {};
-  const days   = ["mon","tue","wed","thu","fri","sat"];
-  const labels = ["月","火","水","木","金","土"];
-
-  timetableBody.innerHTML = "";
-  days.forEach((key, idx) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `<td>${labels[idx]}</td>`;
-    const periods = ttData[key] || [];
-    for (let i = 0; i < 6; i++) {
-      const p = periods[i];
-      row.innerHTML += p
-        ? `<td><div class="subject">${p.subject}</div><div class="detail">${p.room}/${p.teacher}</div></td>`
-        : `<td>-</td>`;
+    const q = query(
+      collection(db, "users"),
+      where("linkedGitHubEmails", "array-contains", ghEmail)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      await deleteUser(auth.currentUser);
+      await signOut(auth);
+      throw new Error("この GitHub アカウントは連携されていません");
     }
-    timetableBody.appendChild(row);
-  });
-}
 
-// --- アカウント一覧描画 ---
-function renderAccountList() {
-  accountListEl.innerHTML = "";
-  if (linkedAccounts.length === 0) {
-    accountListEl.textContent = "連携中のアカウントはありません。";
-    return;
+    const userDoc = snap.docs[0];
+    sessionStorage.setItem("uid", userDoc.id);
+    window.location.href = "home.html";
+  } catch (err) {
+    await signOut(auth);
+    errorMessage.style.display = "block";
+    errorMessage.textContent = err.message;
   }
-  linkedAccounts.forEach((acc, i) => {
-    const photoTag = acc.photoURL ? `<img src="${acc.photoURL}" class="account-icon" alt="icon">` : "";
-    const item = document.createElement("div");
-    item.className = "account-item";
-    item.innerHTML = `
-      ${photoTag}
-      <span class="account-name">${acc.displayName || acc.email}</span>
-      <span class="account-email">${acc.email}</span>
-      <button class="unlink-btn" data-i="${i}">連携解除</button>
-    `;
-    accountListEl.appendChild(item);
-  });
-
-  document.querySelectorAll(".unlink-btn").forEach(btn => {
-    btn.onclick = async e => {
-      const idx = +e.target.dataset.i;
-      const removed = linkedAccounts.splice(idx, 1)[0];
-      const email   = removed.email;
-      let providerId;
-      if (linkedGoogleEmails.includes(email)) providerId = 'google.com';
-      else providerId = 'github.com';
-      await updateDoc(currentUserRef, {
-        [providerId === 'google.com' ? 'linkedGoogleAccounts' : 'linkedGitHubAccounts']: arrayRemove(removed),
-        [providerId === 'google.com' ? 'linkedGoogleEmails' : 'linkedGitHubEmails']:   arrayRemove(email)
-      });
-      await unlink(auth.currentUser, providerId);
-      renderAccountList();
-    };
-  });
-}
-
-// --- 初期表示はホーム ---
-showSection("home");
+});
