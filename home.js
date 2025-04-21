@@ -1,13 +1,13 @@
-// --- Firebase SDK の読み込み ---
+// --- Firebase SDKの読み込み ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
 import {
   getAuth,
   onAuthStateChanged,
   signOut,
   GoogleAuthProvider,
-  GithubAuthProvider,
   linkWithPopup,
-  unlink
+  GithubAuthProvider,
+  signInWithPopup
 } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 import {
   getFirestore,
@@ -45,10 +45,10 @@ const accountListEl   = document.getElementById("account-list");
 const linkGoogleBtn   = document.getElementById("link-google-btn");
 const linkGithubBtn   = document.getElementById("link-github-btn");
 
-let currentUserRef     = null;
-let linkedAccounts     = [];     // { email, displayName, photoURL } の配列
-let linkedGoogleEmails = [];
-let linkedGitHubEmails = [];
+let currentUserRef    = null;
+let linkedAccounts    = [];     // { email, displayName, photoURL } の配列
+let linkedGoogleEmails= [];
+let linkedGitHubEmails= [];
 
 // --- メニュー切り替え ---
 function showSection(sec) {
@@ -92,15 +92,16 @@ onAuthStateChanged(auth, async user => {
   welcomeEl.textContent =
     ようこそ ${data.course}コース ${data.grade}年${data.class}組${data.number}番 ${data.realName}さん！;
 
-  linkedAccounts     = data.linkedGoogleAccounts   || [];
-  linkedGoogleEmails = data.linkedGoogleEmails     || [];
+  // Firestore の配列フィールド読み込み
+  linkedAccounts      = data.linkedGoogleAccounts   || [];
+  linkedGoogleEmails  = data.linkedGoogleEmails     || [];
   if (data.linkedGitHubAccounts) {
     linkedAccounts = linkedAccounts.concat(data.linkedGitHubAccounts);
   }
   linkedGitHubEmails = data.linkedGitHubEmails || [];
 });
 
-// --- Google アカウント連携（Popup） ---
+// --- Googleアカウント連携（Popup） ---
 linkGoogleBtn.onclick = async () => {
   const provider = new GoogleAuthProvider();
   try {
@@ -110,8 +111,8 @@ linkGoogleBtn.onclick = async () => {
 
     const rec = {
       email:       info.email,
-      displayName: info.displayName || "",
-      photoURL:    info.photoURL || ""
+      displayName: info.displayName,
+      photoURL:    info.photoURL
     };
     await updateDoc(currentUserRef, {
       linkedGoogleAccounts: arrayUnion(rec),
@@ -125,19 +126,19 @@ linkGoogleBtn.onclick = async () => {
   }
 };
 
-// --- GitHub アカウント連携（Popup + user:email スコープ） ---
+// --- GitHubアカウント連携（Popup + user:email スコープ） ---
 linkGithubBtn.onclick = async () => {
   const provider = new GithubAuthProvider();
-  provider.addScope("user:email");
+  provider.addScope("user:email");  // ← GitHub で email を取得するために必要
   try {
-    const result = await linkWithPopup(auth.currentUser, provider);
+    const result = await signInWithPopup(auth.currentUser, provider);
     const info = result.user.providerData.find(p => p.providerId === "github.com");
     if (!info || !info.email) throw new Error("GitHub アカウント情報が取得できませんでした");
 
     const rec = {
       email:       info.email,
-      displayName: info.displayName || info.login || "",
-      photoURL:    info.photoURL || ""
+      displayName: info.displayName || info.login,
+      photoURL:    info.photoURL
     };
     await updateDoc(currentUserRef, {
       linkedGitHubAccounts: arrayUnion(rec),
@@ -147,11 +148,7 @@ linkGithubBtn.onclick = async () => {
     linkedGitHubEmails.push(rec.email);
     renderAccountList();
   } catch (err) {
-    if (err.code === 'auth/email-already-in-use' || err.code === 'auth/account-exists-with-different-credential') {
-      alert('この GitHub アカウントのメールアドレスは別アカウントで使用されています');
-    } else {
-      alert("GitHub連携に失敗しました：" + err.message);
-    }
+    alert("GitHub連携に失敗しました：" + err.message);
   }
 };
 
@@ -192,13 +189,10 @@ function renderAccountList() {
     return;
   }
   linkedAccounts.forEach((acc, i) => {
-    const photoTag = acc.photoURL
-      ? <img src="${acc.photoURL}" class="account-icon" alt="icon">
-      : "";
     const item = document.createElement("div");
     item.className = "account-item";
     item.innerHTML = 
-      ${photoTag}
+      ${acc.photoURL ? <img src="${acc.photoURL}" class="account-icon"> : ""}
       <span class="account-name">${acc.displayName || acc.email}</span>
       <span class="account-email">${acc.email}</span>
       <button class="unlink-btn" data-i="${i}">連携解除</button>
@@ -209,24 +203,20 @@ function renderAccountList() {
   document.querySelectorAll(".unlink-btn").forEach(btn => {
     btn.onclick = async e => {
       const idx = +e.target.dataset.i;
-      const removed = linkedAccounts.splice(idx, 1)[0];
+      const removed = linkedAccounts.splice(idx,1)[0];
       const email   = removed.email;
-      let providerId;
+      // Google or GitHub どちらかを判定して配列を更新
       if (linkedGoogleEmails.includes(email)) {
-        providerId = 'google.com';
         await updateDoc(currentUserRef, {
           linkedGoogleAccounts: arrayRemove(removed),
           linkedGoogleEmails:   arrayRemove(email)
         });
       } else {
-        providerId = 'github.com';
         await updateDoc(currentUserRef, {
           linkedGitHubAccounts: arrayRemove(removed),
           linkedGitHubEmails:   arrayRemove(email)
         });
       }
-      // 認証側からもアンリンク
-      await unlink(auth.currentUser, providerId);
       renderAccountList();
     };
   });
