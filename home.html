@@ -2,49 +2,55 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ホーム - SchoolWeb</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ホーム</title>
+  <link rel="stylesheet" href="style.css" />
+  <script type="module" src="home.js" defer></script>
 </head>
 <body>
-  <div class="container">
-    <nav class="sidebar">
-      <div class="sidebar-header">メニュー</div>
-      <ul class="menu">
-        <li class="menu-item active" id="homeBtn">ホーム</li>
-        <li class="menu-item" id="scheduleBtn">時間割</li>
-        <li class="menu-item" id="accountBtn">アカウント</li>
-      </ul>
-      <button id="logoutBtn" class="logout-button">ログアウト</button>
-    </nav>
-    <main class="main-content">
-      <section id="home-section">
-        <h1 id="welcome-message">ようこそ</h1>
-        <h2>今日の時間割</h2>
-        <table class="today-timetable">
-          <thead>
-            <tr>
-              <th>時限</th>
-              <th>教科名</th>
-              <th>教室 / 先生</th>
-            </tr>
-          </thead>
-          <tbody id="today-timetable-body">
-            <!-- JSで内容が入ります -->
-          </tbody>
-        </table>
-      </section>
-
-      <section id="timetable-section" style="display: none;">
-        <!-- 時間割ページは別途埋め込まれる -->
-      </section>
-
-      <section id="account-section" style="display: none;">
-        <!-- アカウント連携・解除など -->
-      </section>
-    </main>
+  <div class="sidebar">
+    <h2 class="sidebar-title">メニュー</h2>
+    <div class="menu">
+      <div class="menu-item active" id="menu-home">ホーム</div>
+      <div class="menu-item" id="menu-timetable">時間割</div>
+      <div class="menu-item" id="menu-account">アカウント</div>
+    </div>
+    <div class="logout-wrapper">
+      <button id="logout">ログアウト</button>
+    </div>
   </div>
 
-  <script type="module" src="home.js"></script>
+  <div class="content">
+    <!-- ホーム -->
+    <div id="home-section">
+      <h1 id="welcome-message">ようこそ！</h1>
+    </div>
+
+    <!-- 時間割 -->
+    <div id="timetable-section" style="display: none;">
+      <h2>時間割</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>曜日</th><th>1限</th><th>2限</th><th>3限</th>
+            <th>4限</th><th>5限</th><th>6限</th>
+          </tr>
+        </thead>
+        <tbody id="timetable-body"></tbody>
+      </table>
+    </div>
+
+    <!-- アカウント設定 -->
+    <div id="account-section" style="display: none;">
+      <h2>アカウント設定</h2>
+      <div id="account-list"></div>
+      <button id="link-google-btn" class="login-btn">
+        Googleアカウントと連携
+      </button>
+      <button id="link-github-btn" class="login-btn" style="margin-top:10px;">
+        GitHubアカウントと連携
+      </button>
+    </div>
+  </div>
 </body>
 </html>
